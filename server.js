@@ -1,38 +1,38 @@
 const express = require('express');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
 app.use(express.json());
 
-// Inicialización del cliente oficial de Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Inicialización del SDK de Google Gen AI
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const SYSTEM_INSTRUCTION = `
 Eres un asistente experto en Roblox Studio.
-Cuando el usuario te pida crear o manipular algo, responde ÚNICAMENTE con código Luau ejecutable en Roblox Studio.
+Cuando el usuario te pida crear o generar algo, responde ÚNICAMENTE con código Luau ejecutable en Roblox Studio.
 NO agregues explicaciones, NO uses bloques de código tipo markdown (\`\`\`lua ... \`\`\`), solo entrega el código Luau directo.
+El código debe crear los elementos en el Workspace usando Instance.new o manipular propiedades.
 
 REGLAS STRICTAS DE SEGURIDAD:
-1. Queda estrictamente PROHIBIDO usar :ClearAllChildren(), :Destroy() o borrar instancias existentes en el Workspace.
-2. ÚNICAMENTE crea nuevos elementos utilizando Instance.new() o modifica propiedades de objetos específicos agregados previamente.
-3. Si el usuario te pide quitar algo, solo borra el objeto específico por su nombre exacto, pero NUNCA limpies el Workspace completo.
+1. Queda totalmente PROHIBIDO usar :ClearAllChildren(), :Destroy() o cualquier método que borre objetos existentes del Workspace.
+2. NUNCA limpies ni vacíes el Workspace completo.
+3. Si el usuario pide remover o quitar algo, únicamente elimina ese objeto específico por su nombre exacto, jamás el escenario completo.
 `;
 
 app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
-
-        if (!prompt) {
-            return res.status(400).json({ error: "El prompt es requerido." });
-        }
-
-        const model = genAI.getGenerativeModel({
-            model: 'gemini-1.5-flash',
-            systemInstruction: SYSTEM_INSTRUCTION,
+        
+        // Uso del modelo soportado
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                systemInstruction: SYSTEM_INSTRUCTION,
+            }
         });
 
-        const result = await model.generateContent(prompt);
-        let responseText = result.response.text() || '';
+        let responseText = response.text;
 
         // Limpieza de formato Markdown
         responseText = responseText.replace(/```lua/g, '').replace(/```/g, '').trim();
@@ -40,7 +40,7 @@ app.post('/generate', async (req, res) => {
         res.json({ code: responseText });
     } catch (error) {
         console.error("Error en servidor Gemini:", error);
-        res.status(500).json({ error: error.message || "Error al generar respuesta" });
+        res.status(500).json({ error: "Error al generar respuesta" });
     }
 });
 
