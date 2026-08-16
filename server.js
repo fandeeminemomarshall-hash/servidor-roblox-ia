@@ -1,10 +1,11 @@
 const express = require('express');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
 app.use(express.json());
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "TU_API_KEY_AQUI");
+// Inicialización del nuevo SDK de Google Gen AI
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const SYSTEM_INSTRUCTION = `
 Eres un asistente experto en Roblox Studio.
@@ -17,21 +18,23 @@ app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
         
-        // Uso del modelo recomendado gemini-2.5-flash
-        const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.5-flash",
-            systemInstruction: SYSTEM_INSTRUCTION
+        // Llamada a la nueva API
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                systemInstruction: SYSTEM_INSTRUCTION,
+            }
         });
 
-        const result = await model.generateContent(prompt);
-        let responseText = result.response.text();
+        let responseText = response.text;
 
-        // Limpieza de formato markdown para Luau
+        // Limpieza de formato Markdown
         responseText = responseText.replace(/```lua/g, '').replace(/```/g, '').trim();
 
         res.json({ code: responseText });
     } catch (error) {
-        console.error("Error en Gemini:", error);
+        console.error("Error en servidor Gemini:", error);
         res.status(500).json({ error: "Error al generar respuesta" });
     }
 });
