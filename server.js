@@ -4,10 +4,10 @@ const { GoogleGenAI } = require('@google/genai');
 const app = express();
 app.use(express.json());
 
-// Inicialización del SDK oficial de Google Gen AI
+// Inicialización del SDK oficial
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Reglas de instrucción del sistema
+// Reglas de instrucción del sistema con protección estricta
 const SYSTEM_INSTRUCTION = `
 Eres un asistente experto en Roblox Studio.
 Cuando el usuario te pida crear o manipular algo, responde ÚNICAMENTE con código Luau ejecutable en Roblox Studio.
@@ -16,7 +16,7 @@ NO agregues explicaciones, NO uses bloques de código tipo markdown (\`\`\`lua .
 REGLAS STRICTAS DE SEGURIDAD:
 1. Queda estrictamente PROHIBIDO usar :ClearAllChildren(), :Destroy() o borrar instancias existentes en el Workspace.
 2. ÚNICAMENTE crea nuevos elementos utilizando Instance.new() o modifica propiedades de objetos específicos agregados previamente.
-3. Si el usuario te pide quitar algo, solo borra el objeto específico por su nombre exacto, pero NUNCA limpies el Workspace.
+3. Si el usuario te pide quitar algo, solo borra el objeto específico por su nombre exacto, pero NUNCA limpies el Workspace completo.
 `;
 
 app.post('/generate', async (req, res) => {
@@ -27,9 +27,9 @@ app.post('/generate', async (req, res) => {
             return res.status(400).json({ error: "El prompt es requerido." });
         }
         
-        // Llamada usando el modelo gemini-2.5-flash
+        // Uso del modelo oficial gemini-1.5-flash
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-1.5-flash',
             contents: prompt,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
