@@ -17,7 +17,6 @@ app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
         
-        -- Inicialización del modelo con la sintaxis y propiedad correctas
         const model = genAI.getGenerativeModel({ 
             model: "gemini-2.5-flash",
             systemInstruction: SYSTEM_INSTRUCTION
@@ -26,7 +25,6 @@ app.post('/generate', async (req, res) => {
         const result = await model.generateContent(prompt);
         let responseText = result.response.text();
 
-        -- Limpieza de etiquetas Markdown para no romper la ejecución en Roblox Studio
         responseText = responseText.replace(/```lua/g, '').replace(/```/g, '').trim();
 
         res.json({ code: responseText });
