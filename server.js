@@ -4,6 +4,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const app = express();
 app.use(express.json());
 
+// Inicialización de la API con la variable de entorno
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "TU_API_KEY_AQUI");
 
 const SYSTEM_INSTRUCTION = `
@@ -17,19 +18,21 @@ app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
         
+        // Usamos el modelo estándar oficial
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.5-flash",
+            model: "gemini-1.5-flash",
             systemInstruction: SYSTEM_INSTRUCTION
         });
 
         const result = await model.generateContent(prompt);
         let responseText = result.response.text();
 
+        // Limpieza de etiquetas Markdown para no romper loadstring()
         responseText = responseText.replace(/```lua/g, '').replace(/```/g, '').trim();
 
         res.json({ code: responseText });
     } catch (error) {
-        console.error("Error:", error);
+        console.error("Error en Gemini:", error);
         res.status(500).json({ error: "Error al generar respuesta" });
     }
 });
