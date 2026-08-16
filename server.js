@@ -4,7 +4,7 @@ const { GoogleGenAI } = require('@google/genai');
 const app = express();
 app.use(express.json());
 
-// Inicialización del nuevo SDK de Google Gen AI
+// Inicialización del SDK de Google Gen AI
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const SYSTEM_INSTRUCTION = `
@@ -18,9 +18,9 @@ app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
         
-        // Uso de modelo disponible en la API de Google Gen AI
+        // Uso del modelo soportado
         const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash-exp',
+            model: 'gemini-3.5-flash',
             contents: prompt,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
@@ -29,7 +29,7 @@ app.post('/generate', async (req, res) => {
 
         let responseText = response.text;
 
-        // Limpieza de etiquetas Markdown
+        // Limpieza de formato Markdown
         responseText = responseText.replace(/```lua/g, '').replace(/```/g, '').trim();
 
         res.json({ code: responseText });
