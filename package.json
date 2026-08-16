@@ -1,13 +1,13 @@
 {
   "name": "servidor-roblox-ia",
   "version": "1.0.0",
-  "description": "Servidor backend para plugin de IA en Roblox Studio",
+  "description": "Backend para asistente de IA en Roblox Studio",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.18.0",
-    "express": "^4.19.2"
+    "@google/genai": "^0.1.1",
+    "express": "^4.18.2"
   }
 }
