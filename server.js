@@ -16,13 +16,18 @@ El código debe crear los elementos en el Workspace usando Instance.new o manipu
 app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
+        
+        -- Inicialización del modelo con la sintaxis y propiedad correctas
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash",
+            model: "gemini-2.5-flash",
             systemInstruction: SYSTEM_INSTRUCTION
         });
 
         const result = await model.generateContent(prompt);
-        const responseText = result.response.text();
+        let responseText = result.response.text();
+
+        -- Limpieza de etiquetas Markdown para no romper la ejecución en Roblox Studio
+        responseText = responseText.replace(/```lua/g, '').replace(/```/g, '').trim();
 
         res.json({ code: responseText });
     } catch (error) {
