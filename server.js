@@ -18,9 +18,9 @@ app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
         
-        // Llamada a la nueva API
+        // Uso de modelo disponible en la API de Google Gen AI
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.0-flash-exp',
             contents: prompt,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
@@ -29,7 +29,7 @@ app.post('/generate', async (req, res) => {
 
         let responseText = response.text;
 
-        // Limpieza de formato Markdown
+        // Limpieza de etiquetas Markdown
         responseText = responseText.replace(/```lua/g, '').replace(/```/g, '').trim();
 
         res.json({ code: responseText });
