@@ -17,16 +17,16 @@ app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
         
-        // Uso del modelo gemini-2.0-flash compatible
+        // Uso del modelo recomendado gemini-2.5-flash
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             systemInstruction: SYSTEM_INSTRUCTION
         });
 
         const result = await model.generateContent(prompt);
         let responseText = result.response.text();
 
-        // Limpieza de bloques markdown
+        // Limpieza de formato markdown para Luau
         responseText = responseText.replace(/```lua/g, '').replace(/```/g, '').trim();
 
         res.json({ code: responseText });
