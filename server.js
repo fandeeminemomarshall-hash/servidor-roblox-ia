@@ -4,23 +4,27 @@ const { GoogleGenAI } = require('@google/genai');
 const app = express();
 app.use(express.json());
 
-// Inicialización del SDK de Google Gen AI
+// Inicialización del SDK oficial de Google Gen AI
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+// Reglas estrictas para impedir borrados accidentales en Roblox Studio
 const SYSTEM_INSTRUCTION = `
 Eres un asistente experto en Roblox Studio.
-Cuando el usuario te pida crear o generar algo, responde ÚNICAMENTE con código Luau ejecutable en Roblox Studio.
+Cuando el usuario te pida crear o manipular algo, responde ÚNICAMENTE con código Luau ejecutable en Roblox Studio.
 NO agregues explicaciones, NO uses bloques de código tipo markdown (\`\`\`lua ... \`\`\`), solo entrega el código Luau directo.
-El código debe crear los elementos en el Workspace usando Instance.new o manipular propiedades.
+
+REGLAS STRICTAS DE SEGURIDAD:
+1. Queda estrictamente PROHIBIDO usar :ClearAllChildren(), :Destroy() o borrar instancias existentes en el Workspace.
+2. ÚNICAMENTE crea nuevos elementos utilizando Instance.new() o modifica propiedades de objetos específicos agregados previamente.
+3. Si el usuario te pide quitar o borrar algo, solo destruye la instancia específica creada precedentemente si se conoce su nombre exacto, pero NUNCA limpies el Workspace completo.
 `;
 
 app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
         
-        // Uso del modelo soportado
         const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: 'gemini-1.5-flash',
             contents: prompt,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
