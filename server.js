@@ -1,13 +1,12 @@
 const express = require('express');
-const { GoogleGenAI } = require('@google/genai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 app.use(express.json());
 
-// Inicialización del SDK oficial
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Inicialización del cliente oficial de Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Reglas de instrucción del sistema con protección estricta
 const SYSTEM_INSTRUCTION = `
 Eres un asistente experto en Roblox Studio.
 Cuando el usuario te pida crear o manipular algo, responde ÚNICAMENTE con código Luau ejecutable en Roblox Studio.
@@ -26,17 +25,14 @@ app.post('/generate', async (req, res) => {
         if (!prompt) {
             return res.status(400).json({ error: "El prompt es requerido." });
         }
-        
-        // Uso del modelo oficial gemini-1.5-flash
-        const response = await ai.models.generateContent({
+
+        const model = genAI.getGenerativeModel({
             model: 'gemini-1.5-flash',
-            contents: prompt,
-            config: {
-                systemInstruction: SYSTEM_INSTRUCTION,
-            }
+            systemInstruction: SYSTEM_INSTRUCTION,
         });
 
-        let responseText = response.text || '';
+        const result = await model.generateContent(prompt);
+        let responseText = result.response.text() || '';
 
         // Limpieza de formato Markdown
         responseText = responseText.replace(/```lua/g, '').replace(/```/g, '').trim();
