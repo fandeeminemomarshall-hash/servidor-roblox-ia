@@ -23,9 +23,9 @@ app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
         
-        // Uso del modelo soportado
+        // Uso del modelo estable gemini-1.5-flash
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-1.5-flash',
             contents: prompt,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
