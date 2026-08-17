@@ -1,11 +1,7 @@
 const express = require('express');
-const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
 app.use(express.json());
-
-// Inicialización del SDK de Google Gen AI
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const SYSTEM_INSTRUCTION = `
 Eres un asistente experto en Roblox Studio.
@@ -22,25 +18,52 @@ REGLAS STRICTAS DE SEGURIDAD:
 app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
-        
-        // Uso del modelo recomendado gemini-2.5-flash
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                systemInstruction: SYSTEM_INSTRUCTION,
-            }
+
+        if (!prompt) {
+            return res.status(400).json({ error: "El prompt es requerido." });
+        }
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return res.status(500).json({ error: "No se ha configurado GEMINI_API_KEY en el servidor." });
+        }
+
+        // Petición directa a la API de REST oficial de Gemini
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+        const payload = {
+            system_instruction: {
+                parts: [{ text: SYSTEM_INSTRUCTION }]
+            },
+            contents: [
+                {
+                    parts: [{ text: prompt }]
+                }
+            ]
+        };
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
         });
 
-        let responseText = response.text;
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error("Error en respuesta de Google API:", data);
+            return res.status(response.status).json({ error: data.error?.message || "Error devuelto por la API de Gemini" });
+        }
+
+        let responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
         // Limpieza de formato Markdown
         responseText = responseText.replace(/```lua/g, '').replace(/```/g, '').trim();
 
         res.json({ code: responseText });
     } catch (error) {
-        console.error("Error en servidor Gemini:", error);
-        res.status(500).json({ error: error.message || "Error al generar respuesta" });
+        console.error("Error interno en servidor:", error);
+        res.status(500).json({ error: error.message || "Error interno al procesar la solicitud" });
     }
 });
 
