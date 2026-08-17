@@ -23,9 +23,9 @@ app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
         
-        // Uso del modelo estable gemini-1.5-flash
+        // Uso del identificador compatible con el nuevo SDK (@google/genai)
         const response = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-1.5-flash-latest',
             contents: prompt,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
@@ -40,7 +40,7 @@ app.post('/generate', async (req, res) => {
         res.json({ code: responseText });
     } catch (error) {
         console.error("Error en servidor Gemini:", error);
-        res.status(500).json({ error: "Error al generar respuesta" });
+        res.status(500).json({ error: error.message || "Error al generar respuesta" });
     }
 });
 
