@@ -23,9 +23,9 @@ app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
         
-        // Uso del identificador compatible con el nuevo SDK (@google/genai)
+        // Uso del modelo estándar compatible con el SDK @google/genai
         const response = await ai.models.generateContent({
-            model: 'gemini-1.5-flash-latest',
+            model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
