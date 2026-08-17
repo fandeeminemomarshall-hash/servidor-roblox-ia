@@ -23,7 +23,7 @@ app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
         
-        // Uso del modelo estándar compatible con el SDK @google/genai
+        // Uso del modelo oficial gemini-2.5-flash
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
