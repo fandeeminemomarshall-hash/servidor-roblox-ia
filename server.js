@@ -16,6 +16,12 @@ PERMISOS SOBRE SCRIPTS:
 - En cada pedido vas a recibir automáticamente el listado completo de scripts del proyecto (path completo desde game, tipo y código fuente actual de cada uno), y opcionalmente cuál está seleccionado en el Explorer. Usá ese listado como tu única fuente de verdad sobre lo que ya existe en el juego: no inventes scripts, funciones o variables que no estén ahí si el usuario te pide modificar algo puntual.
 - Para localizar un script específico en el código Luau que generes, usá su path completo (por ejemplo game.ServerScriptService.NPC.MovimientoNPC), no solo el nombre, porque puede haber varios scripts con el mismo nombre en distintos lugares.
 
+CONTEXTO DEL MAPA:
+- En cada pedido también vas a recibir un listado de los objetos de nivel superior del Workspace (partes y modelos), cada uno con su nombre, tipo, posición (x, y, z) y tamaño (x, y, z). Para los modelos, la posición y el tamaño corresponden a su caja delimitadora completa (todo el modelo en conjunto), no a una parte individual adentro.
+- Usá esas posiciones y tamaños como referencia real para ubicar cosas nuevas en relación a objetos existentes. Por ejemplo, si te piden poner algo "al lado de la Casa", calculá una posición cercana sumando o restando a la posición de "Casa" un offset razonable basado en su tamaño (por ejemplo, la mitad del ancho de la Casa más un margen).
+- Si te dicen "encima de" algo, sumá a la coordenada Y la mitad de la altura (tamaño en Y) del objeto de referencia más la mitad de la altura de lo que estás creando.
+- Si el listado indica que hay Terrain en el mapa, tenelo en cuenta como referencia de "el piso", pero no intentes leerlo ni modificarlo parte por parte.
+
 REGLAS ESTRICTAS DE SEGURIDAD (INQUEBRANTABLES):
 1. Queda TOTALMENTE PROHIBIDO usar :ClearAllChildren(), :Destroy(), :Remove(), o cualquier método que elimine instancias existentes del Workspace, incluyendo scripts.
 2. NUNCA limpies ni vacíes el Workspace completo, ni ningún contenedor (Workspace, ServerScriptService, StarterPlayer, etc.) por completo.
@@ -25,7 +31,7 @@ REGLAS ESTRICTAS DE SEGURIDAD (INQUEBRANTABLES):
 
 app.post('/generate', async (req, res) => {
     try {
-        const { prompt, scriptContext, projectScripts } = req.body;
+        const { prompt, scriptContext, projectScripts, mapObjects, hasTerrain } = req.body;
         if (!prompt) {
             return res.status(400).json({ error: "El prompt es requerido." });
         }
@@ -35,8 +41,8 @@ app.post('/generate', async (req, res) => {
             return res.status(500).json({ error: "No se ha configurado GEMINI_API_KEY en el servidor." });
         }
 
-        // Armamos el contexto completo: primero el listado de todos los scripts
-        // del proyecto (si vino), después cuál está seleccionado (si vino), y al final el pedido.
+        // Armamos el contexto completo: listado de scripts, mapa de objetos,
+        // selección actual (si vino), y al final el pedido del usuario.
         let contextoPartes = [];
 
         if (Array.isArray(projectScripts) && projectScripts.length > 0) {
@@ -44,6 +50,17 @@ app.post('/generate', async (req, res) => {
                 `Path: ${s.path}\nTipo: ${s.className}\nSource:\n${s.source}`
             ).join('\n---\n');
             contextoPartes.push(`Listado completo de scripts existentes en el proyecto:\n---\n${listado}\n---`);
+        }
+
+        if (Array.isArray(mapObjects) && mapObjects.length > 0) {
+            const listadoMapa = mapObjects.map(o =>
+                `${o.name} (${o.className}) - posición: (${o.position.x}, ${o.position.y}, ${o.position.z}) - tamaño: (${o.size.x}, ${o.size.y}, ${o.size.z})`
+            ).join('\n');
+            contextoPartes.push(`Objetos existentes en el Workspace (nivel superior):\n---\n${listadoMapa}\n---`);
+        }
+
+        if (hasTerrain) {
+            contextoPartes.push(`El mapa tiene Terrain (terreno esculpido) además de las partes/modelos listados.`);
         }
 
         if (scriptContext && scriptContext.source) {
