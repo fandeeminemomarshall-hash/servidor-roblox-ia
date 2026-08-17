@@ -22,6 +22,10 @@ CONTEXTO DEL MAPA:
 - Si te dicen "encima de" algo, sumá a la coordenada Y la mitad de la altura (tamaño en Y) del objeto de referencia más la mitad de la altura de lo que estás creando.
 - Si el listado indica que hay Terrain en el mapa, tenelo en cuenta como referencia de "el piso", pero no intentes leerlo ni modificarlo parte por parte.
 
+MEMORIA DE LA CONVERSACIÓN:
+- Vas a recibir el historial de mensajes previos de esta misma conversación (tus explicaciones anteriores y los pedidos anteriores del usuario). Usalo para entender referencias como "eso", "lo que hiciste antes", "la casa que creamos", o pedidos de ajuste como "hacela más grande" o "cambiale el color", que se refieren a algo mencionado en turnos anteriores.
+- El estado real y actual de los objetos (posiciones, tamaños, código de scripts) siempre te lo doy fresco en el listado de scripts y el mapa de cada pedido, así que confiá en esos datos actuales por sobre lo que digas que hiciste en mensajes viejos si hay alguna diferencia.
+
 REGLAS ESTRICTAS DE SEGURIDAD (INQUEBRANTABLES):
 1. Queda TOTALMENTE PROHIBIDO usar :ClearAllChildren(), :Destroy(), :Remove(), o cualquier método que elimine instancias existentes del Workspace, incluyendo scripts.
 2. NUNCA limpies ni vacíes el Workspace completo, ni ningún contenedor (Workspace, ServerScriptService, StarterPlayer, etc.) por completo.
@@ -31,7 +35,7 @@ REGLAS ESTRICTAS DE SEGURIDAD (INQUEBRANTABLES):
 
 app.post('/generate', async (req, res) => {
     try {
-        const { prompt, scriptContext, projectScripts, mapObjects, hasTerrain } = req.body;
+        const { prompt, scriptContext, projectScripts, mapObjects, hasTerrain, history } = req.body;
         if (!prompt) {
             return res.status(400).json({ error: "El prompt es requerido." });
         }
@@ -71,6 +75,20 @@ app.post('/generate', async (req, res) => {
 
         const fullPrompt = contextoPartes.join('\n\n');
 
+        // Armamos los turnos previos de la conversación (si vinieron) como contents
+        // separados, para que Gemini tenga memoria real de lo que se pidió y contestó antes.
+        const contentsHistorial = [];
+        if (Array.isArray(history)) {
+            for (const turno of history) {
+                if (turno && (turno.role === 'user' || turno.role === 'model') && typeof turno.text === 'string' && turno.text.trim() !== '') {
+                    contentsHistorial.push({
+                        role: turno.role,
+                        parts: [{ text: turno.text }]
+                    });
+                }
+            }
+        }
+
         // Modelo actualizado: gemini-1.5-flash fue retirado por Google (devuelve 404).
         // gemini-3.1-flash-lite es el reemplazo vigente equivalente en velocidad/costo.
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`;
@@ -80,7 +98,9 @@ app.post('/generate', async (req, res) => {
                 parts: [{ text: SYSTEM_INSTRUCTION }]
             },
             contents: [
+                ...contentsHistorial,
                 {
+                    role: 'user',
                     parts: [{ text: fullPrompt }]
                 }
             ],
