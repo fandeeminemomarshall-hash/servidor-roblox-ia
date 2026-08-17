@@ -1,5 +1,4 @@
 const express = require('express');
-
 const app = express();
 app.use(express.json());
 
@@ -8,7 +7,6 @@ Eres un asistente experto en Roblox Studio.
 Cuando el usuario te pida crear o generar algo, responde ÚNICAMENTE con código Luau ejecutable en Roblox Studio.
 NO agregues explicaciones, NO uses bloques de código tipo markdown (\`\`\`lua ... \`\`\`), solo entrega el código Luau directo.
 El código debe crear los elementos en el Workspace usando Instance.new o manipular propiedades.
-
 REGLAS STRICTAS DE SEGURIDAD:
 1. Queda totalmente PROHIBIDO usar :ClearAllChildren(), :Destroy() o cualquier método que borre objetos existentes del Workspace.
 2. NUNCA limpies ni vacíes el Workspace completo.
@@ -18,7 +16,6 @@ REGLAS STRICTAS DE SEGURIDAD:
 app.post('/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
-
         if (!prompt) {
             return res.status(400).json({ error: "El prompt es requerido." });
         }
@@ -28,8 +25,9 @@ app.post('/generate', async (req, res) => {
             return res.status(500).json({ error: "No se ha configurado GEMINI_API_KEY en el servidor." });
         }
 
-        // Petición directa a la API de REST oficial de Gemini
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        // Modelo actualizado: gemini-1.5-flash fue retirado por Google (devuelve 404).
+        // gemini-3.1-flash-lite es el reemplazo vigente equivalente en velocidad/costo.
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`;
 
         const payload = {
             system_instruction: {
@@ -61,6 +59,7 @@ app.post('/generate', async (req, res) => {
         responseText = responseText.replace(/```lua/g, '').replace(/```/g, '').trim();
 
         res.json({ code: responseText });
+
     } catch (error) {
         console.error("Error interno en servidor:", error);
         res.status(500).json({ error: error.message || "Error interno al procesar la solicitud" });
