@@ -1,174 +1,415 @@
-const express = require('express');
+const express = require("express");
 
 const app = express();
-app.use(express.json());
 
-// ---------------------------------------------------------------------------
-// SYSTEM INSTRUCTION mejorada:
-// - Aclara explícitamente que es LUAU (no Lua genérico, no Python).
-// - Incluye un ejemplo concreto de sintaxis correcta (few-shot) para anclar
-//   el estilo del modelo.
-// - Mantiene tus reglas de seguridad originales.
-// ---------------------------------------------------------------------------
+app.use(express.json({ limit: "1mb" }));
+
+// ============================================================
+// CONFIGURACIÓN
+// ============================================================
+
+const PORT = process.env.PORT || 3000;
+
+// ============================================================
+// INSTRUCCIÓN DEL SISTEMA
+// ============================================================
+
 const SYSTEM_INSTRUCTION = `
-Eres un asistente experto en Roblox Studio. El lenguaje es LUAU (una variante
-tipada de Lua 5.1 usada por Roblox), NO Python y NO Lua genérico.
+Eres un asistente experto en Roblox Studio.
 
-REGLAS DE SINTAXIS OBLIGATORIAS:
-1. Todo bloque (function, if, for, while, do) DEBE cerrarse con la palabra "end".
-   Un bloque "repeat ... until <condición>" NO lleva "end".
-2. Los comentarios se escriben con "--", nunca con "#" ni "//".
-3. NUNCA uses ":" para abrir un bloque (eso es Python). Usa "then" para if,
-   "do" para for/while, y cierra siempre con "end".
-4. No uses indentación como sustituto de "end". Roblox no es sensible a la
-   indentación; todo bloque necesita su palabra de cierre explícita.
-5. Antes de terminar tu respuesta, revisa mentalmente que cada
-   function/if/for/while tenga su "end" correspondiente.
+El lenguaje obligatorio es LUAU, la variante de Lua utilizada por Roblox.
+NO uses Python.
+NO uses JavaScript.
+NO uses Lua genérico incompatible con Roblox.
 
-EJEMPLO DE SINTAXIS CORRECTA (síguelo como referencia de estilo):
+Cuando el usuario te pida crear o generar algo:
+
+- Responde ÚNICAMENTE con código Luau.
+- NO escribas explicaciones.
+- NO escribas texto antes ni después del código.
+- NO utilices bloques Markdown.
+- NO escribas \`\`\`lua.
+- El resultado debe poder ejecutarse mediante loadstring() en Roblox Studio.
+
+REGLAS DE SINTAXIS:
+
+1. Todo function, if, for, while y do debe cerrarse correctamente con "end".
+2. repeat ... until NO utiliza "end".
+3. Los comentarios utilizan "--".
+4. Los if utilizan "then".
+5. Los for y while utilizan "do".
+6. Nunca utilices sintaxis de Python.
+7. Revisa que todos los bloques estén correctamente cerrados.
+
+EJEMPLO:
+
 local part = Instance.new("Part")
 part.Name = "Ejemplo"
+part.Size = Vector3.new(5, 5, 5)
+part.Position = Vector3.new(0, 5, 0)
 part.Parent = workspace
 
-local function saludar(jugador)
-	if jugador then
-		print("Hola " .. jugador.Name)
-	end
+local function crearParte(nombre, posicion)
+	local nuevaParte = Instance.new("Part")
+	nuevaParte.Name = nombre
+	nuevaParte.Position = posicion
+	nuevaParte.Parent = workspace
 end
 
-for i = 1, 5 do
-	print(i)
-end
-
-Cuando el usuario te pida crear o generar algo, responde ÚNICAMENTE con código
-Luau ejecutable en Roblox Studio. NO agregues explicaciones, NO uses bloques
-de código tipo markdown (\`\`\`lua ... \`\`\`), solo entrega el código Luau directo.
-El código debe crear los elementos en el Workspace usando Instance.new o
-manipular propiedades.
+crearParte("Parte1", Vector3.new(0, 5, 0))
 
 REGLAS ESTRICTAS DE SEGURIDAD:
-1. Queda totalmente PROHIBIDO usar :ClearAllChildren(), :Destroy() o cualquier
-   método que borre objetos existentes del Workspace.
-2. NUNCA limpies ni vacíes el Workspace completo.
-3. Si el usuario pide remover o quitar algo, únicamente elimina ese objeto
-   específico por su nombre exacto, jamás el escenario completo.
+
+1. PROHIBIDO utilizar :ClearAllChildren().
+2. PROHIBIDO utilizar :Destroy().
+3. PROHIBIDO eliminar objetos existentes de forma masiva.
+4. PROHIBIDO limpiar Workspace.
+5. PROHIBIDO vaciar Workspace.
+6. No elimines objetos existentes salvo que el usuario solicite explícitamente
+   eliminar un objeto concreto.
+7. Si el usuario solicita eliminar algo, solo puede eliminarse el objeto
+   específico solicitado y debe identificarse por su nombre exacto.
+8. Nunca elimines Workspace completo.
+9. Nunca elimines todos los hijos de Workspace.
+10. No generes código destinado a destruir o borrar el proyecto del usuario.
+
+Prioriza siempre crear nuevos objetos mediante Instance.new().
 `;
 
-// ---------------------------------------------------------------------------
-// Chequeo heurístico de balance de bloques.
-// No es un parser real de Luau (eso requeriría una librería dedicada), pero
-// detecta el caso más común: código truncado o con "end" faltantes/sobrantes.
-// ---------------------------------------------------------------------------
-function checkBlockBalance(code) {
-	// Cuenta aperturas de bloque que requieren "end".
-	// Nota: "for ... do" y "while ... do" cuentan como UNA apertura cada uno
-	// (el "do" es parte del encabezado, no un bloque aparte), así que solo
-	// contamos las palabras clave que inician el bloque.
-	const openers = (code.match(/\b(function|if|for|while)\b/g) || []).length;
-	const enders = (code.match(/\bend\b/g) || []).length;
+// ============================================================
+// RUTA DE PRUEBA
+// ============================================================
 
-	// repeat...until no usa "end", así que no lo contamos como opener.
-	// Un desbalance grande (diferencia > 0) casi siempre significa
-	// truncamiento o un bloque mal cerrado.
-	const diff = openers - enders;
+app.get("/", (req, res) => {
+	res.status(200).json({
+		status: "online",
+		service: "Roblox AI Assistant",
+		message: "Servidor funcionando correctamente.",
+	});
+});
 
-	return {
-		balanced: diff <= 0, // permitimos que sobren "end" sueltos sin bloquear
-		diff,
-		openers,
-		enders,
-	};
-}
+// ============================================================
+// HEALTH CHECK
+// ============================================================
+
+app.get("/health", (req, res) => {
+	res.status(200).json({
+		status: "ok",
+	});
+});
+
+// ============================================================
+// LIMPIAR MARKDOWN
+// ============================================================
 
 function cleanMarkdown(text) {
+	if (!text) {
+		return "";
+	}
+
 	return text
-		.replace(/```lua/gi, '')
-		.replace(/```luau/gi, '')
-		.replace(/```/g, '')
+		.replace(/```luau/gi, "")
+		.replace(/```lua/gi, "")
+		.replace(/```/g, "")
 		.trim();
 }
 
+// ============================================================
+// VALIDACIÓN BÁSICA
+// ============================================================
+
+function validateGeneratedCode(code) {
+	const dangerousPatterns = [
+		/:ClearAllChildren\s*\(/i,
+		/:Destroy\s*\(/i,
+		/\bClearAllChildren\s*\(/i,
+		/\bDestroy\s*\(/i,
+	];
+
+	for (const pattern of dangerousPatterns) {
+		if (pattern.test(code)) {
+			return {
+				valid: false,
+				reason: "El código generado contiene una operación bloqueada.",
+			};
+		}
+	}
+
+	return {
+		valid: true,
+		reason: null,
+	};
+}
+
+// ============================================================
+// BALANCE DE BLOQUES
+// ============================================================
+
+function checkBlockBalance(code) {
+	const withoutStrings = code
+		.replace(/"(?:\\.|[^"\\])*"/g, '""')
+		.replace(/'(?:\\.|[^'\\])*'/g, "''");
+
+	const openers =
+		withoutStrings.match(/\b(function|if|for|while)\b/g) || [];
+
+	const enders =
+		withoutStrings.match(/\bend\b/g) || [];
+
+	const diff = openers.length - enders.length;
+
+	return {
+		balanced: diff === 0,
+		diff,
+		openers: openers.length,
+		enders: enders.length,
+	};
+}
+
+// ============================================================
+// GEMINI
+// ============================================================
+
 async function callGemini(prompt, apiKey) {
-	const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+	const url =
+		`https://generativelanguage.googleapis.com/v1beta/models/` +
+		`gemini-2.5-flash:generateContent?key=${apiKey}`;
 
 	const payload = {
 		system_instruction: {
-			parts: [{ text: SYSTEM_INSTRUCTION }],
+			parts: [
+				{
+					text: SYSTEM_INSTRUCTION,
+				},
+			],
 		},
+
 		contents: [
 			{
-				parts: [{ text: prompt }],
+				role: "user",
+				parts: [
+					{
+						text: prompt,
+					},
+				],
 			},
 		],
+
 		generationConfig: {
-			temperature: 0.3,       // menos creatividad = menos errores de sintaxis
-			maxOutputTokens: 2048,  // sube este número si generas scripts largos
+			temperature: 0.2,
+			maxOutputTokens: 4096,
 		},
 	};
 
 	const response = await fetch(url, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		method: "POST",
+
+		headers: {
+			"Content-Type": "application/json",
+		},
+
 		body: JSON.stringify(payload),
 	});
 
 	const data = await response.json();
 
 	if (!response.ok) {
-		const err = new Error(data.error?.message || 'Error devuelto por la API de Gemini');
-		err.status = response.status;
-		throw err;
+		const error = new Error(
+			data?.error?.message ||
+			"Google Gemini devolvió un error."
+		);
+
+		error.status = response.status;
+
+		throw error;
 	}
 
-	// Nota: la ruta correcta de Gemini es content.parts[0].text (parts es un
-	// array), no content[0].text.
-	const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-	return cleanMarkdown(rawText);
+	const text =
+		data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+	if (!text) {
+		throw new Error(
+			"Gemini no devolvió código."
+		);
+	}
+
+	return cleanMarkdown(text);
 }
 
-app.post('/generate', async (req, res) => {
+// ============================================================
+// POST /generate
+// ============================================================
+
+app.post("/generate", async (req, res) => {
 	try {
-		const { prompt } = req.body;
+		const prompt = req.body?.prompt;
 
-		if (!prompt) {
-			return res.status(400).json({ error: 'El prompt es requerido.' });
-		}
-
-		const apiKey = process.env.GEMINI_API_KEY;
-		if (!apiKey) {
-			return res.status(500).json({ error: 'No se ha configurado GEMINI_API_KEY en el servidor.' });
-		}
-
-		let code = await callGemini(prompt, apiKey);
-		let balance = checkBlockBalance(code);
-
-		// Si detectamos desbalance (probable truncamiento o error de sintaxis),
-		// reintentamos UNA vez pidiéndole explícitamente a Gemini que corrija
-		// el problema, mostrándole su propio código.
-		if (!balance.balanced) {
-			const retryPrompt = `Tu respuesta anterior tiene un error de sintaxis: le faltan ${balance.diff} palabra(s) "end" respecto a los bloques abiertos (function/if/for/while). Aquí está tu código, corrígelo y devuelve SOLO el código Luau corregido, completo y balanceado, sin explicaciones:\n\n${code}`;
-
-			code = await callGemini(retryPrompt, apiKey);
-			balance = checkBlockBalance(code);
-		}
-
-		// Si sigue desbalanceado después del reintento, avisamos al plugin
-		// en vez de mandar código roto directo a loadstring().
-		if (!balance.balanced) {
-			return res.status(422).json({
-				error: 'La IA generó código con posible error de sintaxis (bloques sin cerrar) incluso tras un reintento. Revisa el prompt o inténtalo de nuevo.',
-				code, // lo mandamos igual para que puedas inspeccionarlo si quieres
+		if (
+			typeof prompt !== "string" ||
+			prompt.trim().length === 0
+		) {
+			return res.status(400).json({
+				error: "El prompt es requerido.",
 			});
 		}
 
-		return res.json({ code });
+		if (prompt.length > 10000) {
+			return res.status(400).json({
+				error: "El prompt es demasiado largo.",
+			});
+		}
+
+		const apiKey = process.env.GEMINI_API_KEY;
+
+		if (!apiKey) {
+			return res.status(500).json({
+				error:
+					"No se ha configurado GEMINI_API_KEY en Render.",
+			});
+		}
+
+		console.log("Generando código para:", prompt);
+
+		let code = await callGemini(
+			prompt.trim(),
+			apiKey
+		);
+
+		// ========================================================
+		// VALIDACIÓN DE SEGURIDAD
+		// ========================================================
+
+		let security = validateGeneratedCode(code);
+
+		if (!security.valid) {
+			console.warn(
+				"Código bloqueado:",
+				security.reason
+			);
+
+			return res.status(422).json({
+				error: security.reason,
+			});
+		}
+
+		// ========================================================
+		// BALANCE
+		// ========================================================
+
+		let balance = checkBlockBalance(code);
+
+		// ========================================================
+		// REINTENTO
+		// ========================================================
+
+		if (!balance.balanced) {
+			console.log(
+				"Posible error de bloques. Intentando corregir..."
+			);
+
+			const retryPrompt = `
+Tu respuesta anterior tiene un posible error de sintaxis.
+
+Debes devolver SOLO código Luau.
+
+No agregues explicaciones.
+No uses Markdown.
+No uses bloques de código.
+
+Corrige todos los bloques function, if, for y while.
+
+Aquí está el código anterior:
+
+${code}
+
+Devuelve el código Luau completo y corregido.
+`;
+
+			code = await callGemini(
+				retryPrompt,
+				apiKey
+			);
+
+			security = validateGeneratedCode(code);
+
+			if (!security.valid) {
+				return res.status(422).json({
+					error: security.reason,
+				});
+			}
+
+			balance = checkBlockBalance(code);
+		}
+
+		// ========================================================
+		// RESPUESTA FINAL
+		// ========================================================
+
+		if (!balance.balanced) {
+			return res.status(422).json({
+				error:
+					"Gemini generó código con posible error de sintaxis.",
+				code: code,
+			});
+		}
+
+		console.log(
+			"Código generado correctamente."
+		);
+
+		return res.status(200).json({
+			code: code,
+		});
+
 	} catch (error) {
-		console.error('Error en /generate:', error);
-		return res.status(error.status || 500).json({ error: error.message || 'Error interno del servidor.' });
+		console.error(
+			"Error en /generate:",
+			error
+		);
+
+		return res.status(
+			error.status || 500
+		).json({
+			error:
+				error.message ||
+				"Error interno del servidor.",
+		});
 	}
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-	console.log(`Servidor escuchando en el puerto ${PORT}`);
+// ============================================================
+// 404
+// ============================================================
+
+app.use((req, res) => {
+	res.status(404).json({
+		error: "Ruta no encontrada.",
+		path: req.path,
+		method: req.method,
+	});
+});
+
+// ============================================================
+// ERROR GENERAL
+// ============================================================
+
+app.use((error, req, res, next) => {
+	console.error(
+		"Error general:",
+		error
+	);
+
+	res.status(500).json({
+		error: "Error interno del servidor.",
+	});
+});
+
+// ============================================================
+// SERVIDOR
+// ============================================================
+
+app.listen(PORT, "0.0.0.0", () => {
+	console.log(
+		`Servidor escuchando en el puerto ${PORT}`
+	);
 });
