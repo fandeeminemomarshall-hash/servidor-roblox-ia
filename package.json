@@ -1,15 +1,15 @@
 {
-  "name": "servidor-roblox-ia",
+  "name": "roblox-ai-assistant",
   "version": "1.0.0",
-  "description": "Backend para asistente de IA en Roblox Studio",
+  "description": "Backend para Roblox AI Assistant",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18"
   },
   "dependencies": {
-    "express": "^4.18.2"
+    "express": "^4.21.2"
   }
 }
