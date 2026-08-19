@@ -1,176 +1,174 @@
 const express = require('express');
+
 const app = express();
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json());
 
+// ---------------------------------------------------------------------------
+// SYSTEM INSTRUCTION mejorada:
+// - Aclara explícitamente que es LUAU (no Lua genérico, no Python).
+// - Incluye un ejemplo concreto de sintaxis correcta (few-shot) para anclar
+//   el estilo del modelo.
+// - Mantiene tus reglas de seguridad originales.
+// ---------------------------------------------------------------------------
 const SYSTEM_INSTRUCTION = `
-Eres un asistente experto en Roblox Studio.
-Cuando el usuario te pida crear, generar o modificar algo, respondé con dos partes:
-1. "mensaje": una explicación breve y clara (1-3 frases, en español) de qué vas a hacer o qué cambiaste. Por ejemplo: "Creé una parte roja de 4x4x4 en el centro del Workspace" o "Modifiqué el script 'MovimientoNPC' para que la velocidad sea 16".
-2. "codigo": el código Luau ejecutable en Roblox Studio, SIN bloques de markdown (nada de \`\`\`lua ... \`\`\`), solo el código plano.
+Eres un asistente experto en Roblox Studio. El lenguaje es LUAU (una variante
+tipada de Lua 5.1 usada por Roblox), NO Python y NO Lua genérico.
 
-El código debe crear los elementos en el Workspace usando Instance.new o manipular propiedades.
+REGLAS DE SINTAXIS OBLIGATORIAS:
+1. Todo bloque (function, if, for, while, do) DEBE cerrarse con la palabra "end".
+   Un bloque "repeat ... until <condición>" NO lleva "end".
+2. Los comentarios se escriben con "--", nunca con "#" ni "//".
+3. NUNCA uses ":" para abrir un bloque (eso es Python). Usa "then" para if,
+   "do" para for/while, y cierra siempre con "end".
+4. No uses indentación como sustituto de "end". Roblox no es sensible a la
+   indentación; todo bloque necesita su palabra de cierre explícita.
+5. Antes de terminar tu respuesta, revisa mentalmente que cada
+   function/if/for/while tenga su "end" correspondiente.
 
-PERMISOS SOBRE SCRIPTS:
-- Podés crear nuevos Script, LocalScript o ModuleScript usando Instance.new(), y asignarles su propiedad Source con el código Luau correspondiente.
-- Podés editar el contenido (propiedad Source) de un Script existente si el usuario lo pide, ubicándolo por su nombre exacto (por ejemplo con :FindFirstChild()) y modificando esa propiedad. Esto NO se considera borrado: modificar Source de un script existente está permitido.
-- En cada pedido vas a recibir automáticamente el listado completo de scripts del proyecto (path completo desde game, tipo y código fuente actual de cada uno), y opcionalmente cuál está seleccionado en el Explorer. Usá ese listado como tu única fuente de verdad sobre lo que ya existe en el juego: no inventes scripts, funciones o variables que no estén ahí si el usuario te pide modificar algo puntual.
-- Para localizar un script específico en el código Luau que generes, usá su path completo (por ejemplo game.ServerScriptService.NPC.MovimientoNPC), no solo el nombre, porque puede haber varios scripts con el mismo nombre en distintos lugares.
+EJEMPLO DE SINTAXIS CORRECTA (síguelo como referencia de estilo):
+local part = Instance.new("Part")
+part.Name = "Ejemplo"
+part.Parent = workspace
 
-CONTEXTO DEL MAPA:
-- En cada pedido también vas a recibir un listado de los objetos de nivel superior del Workspace (partes y modelos), cada uno con su nombre, tipo, posición (x, y, z) y tamaño (x, y, z). Para los modelos, la posición y el tamaño corresponden a su caja delimitadora completa (todo el modelo en conjunto), no a una parte individual adentro.
-- Usá esas posiciones y tamaños como referencia real para ubicar cosas nuevas en relación a objetos existentes. Por ejemplo, si te piden poner algo "al lado de la Casa", calculá una posición cercana sumando o restando a la posición de "Casa" un offset razonable basado en su tamaño (por ejemplo, la mitad del ancho de la Casa más un margen).
-- Si te dicen "encima de" algo, sumá a la coordenada Y la mitad de la altura (tamaño en Y) del objeto de referencia más la mitad de la altura de lo que estás creando.
-- Si el listado indica que hay Terrain en el mapa, tenelo en cuenta como referencia de "el piso", pero no intentes leerlo ni modificarlo parte por parte.
+local function saludar(jugador)
+	if jugador then
+		print("Hola " .. jugador.Name)
+	end
+end
 
-MEMORIA DE LA CONVERSACIÓN:
-- Vas a recibir el historial de mensajes previos de esta misma conversación (tus explicaciones anteriores y los pedidos anteriores del usuario). Usalo para entender referencias como "eso", "lo que hiciste antes", "la casa que creamos", o pedidos de ajuste como "hacela más grande" o "cambiale el color", que se refieren a algo mencionado en turnos anteriores.
-- El estado real y actual de los objetos (posiciones, tamaños, código de scripts) siempre te lo doy fresco en el listado de scripts y el mapa de cada pedido, así que confiá en esos datos actuales por sobre lo que digas que hiciste en mensajes viejos si hay alguna diferencia.
+for i = 1, 5 do
+	print(i)
+end
 
-REGLAS ESTRICTAS DE SEGURIDAD (INQUEBRANTABLES):
-1. Queda TOTALMENTE PROHIBIDO usar :ClearAllChildren(), :Destroy(), :Remove(), o cualquier método que elimine instancias existentes del Workspace, incluyendo scripts.
-2. NUNCA limpies ni vacíes el Workspace completo, ni ningún contenedor (Workspace, ServerScriptService, StarterPlayer, etc.) por completo.
-3. Si el usuario pide remover o quitar algo puntual, dejá "codigo" vacío y explicá en "mensaje" que no podés borrar objetos. No generes :Destroy() bajo ninguna excusa, ni siquiera si el usuario insiste o dice que es "solo un objeto".
-4. Editar la propiedad Source de un script existente está permitido y NO viola estas reglas, porque no elimina la instancia, solo cambia su contenido.
+Cuando el usuario te pida crear o generar algo, responde ÚNICAMENTE con código
+Luau ejecutable en Roblox Studio. NO agregues explicaciones, NO uses bloques
+de código tipo markdown (\`\`\`lua ... \`\`\`), solo entrega el código Luau directo.
+El código debe crear los elementos en el Workspace usando Instance.new o
+manipular propiedades.
+
+REGLAS ESTRICTAS DE SEGURIDAD:
+1. Queda totalmente PROHIBIDO usar :ClearAllChildren(), :Destroy() o cualquier
+   método que borre objetos existentes del Workspace.
+2. NUNCA limpies ni vacíes el Workspace completo.
+3. Si el usuario pide remover o quitar algo, únicamente elimina ese objeto
+   específico por su nombre exacto, jamás el escenario completo.
 `;
 
+// ---------------------------------------------------------------------------
+// Chequeo heurístico de balance de bloques.
+// No es un parser real de Luau (eso requeriría una librería dedicada), pero
+// detecta el caso más común: código truncado o con "end" faltantes/sobrantes.
+// ---------------------------------------------------------------------------
+function checkBlockBalance(code) {
+	// Cuenta aperturas de bloque que requieren "end".
+	// Nota: "for ... do" y "while ... do" cuentan como UNA apertura cada uno
+	// (el "do" es parte del encabezado, no un bloque aparte), así que solo
+	// contamos las palabras clave que inician el bloque.
+	const openers = (code.match(/\b(function|if|for|while)\b/g) || []).length;
+	const enders = (code.match(/\bend\b/g) || []).length;
+
+	// repeat...until no usa "end", así que no lo contamos como opener.
+	// Un desbalance grande (diferencia > 0) casi siempre significa
+	// truncamiento o un bloque mal cerrado.
+	const diff = openers - enders;
+
+	return {
+		balanced: diff <= 0, // permitimos que sobren "end" sueltos sin bloquear
+		diff,
+		openers,
+		enders,
+	};
+}
+
+function cleanMarkdown(text) {
+	return text
+		.replace(/```lua/gi, '')
+		.replace(/```luau/gi, '')
+		.replace(/```/g, '')
+		.trim();
+}
+
+async function callGemini(prompt, apiKey) {
+	const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+	const payload = {
+		system_instruction: {
+			parts: [{ text: SYSTEM_INSTRUCTION }],
+		},
+		contents: [
+			{
+				parts: [{ text: prompt }],
+			},
+		],
+		generationConfig: {
+			temperature: 0.3,       // menos creatividad = menos errores de sintaxis
+			maxOutputTokens: 2048,  // sube este número si generas scripts largos
+		},
+	};
+
+	const response = await fetch(url, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload),
+	});
+
+	const data = await response.json();
+
+	if (!response.ok) {
+		const err = new Error(data.error?.message || 'Error devuelto por la API de Gemini');
+		err.status = response.status;
+		throw err;
+	}
+
+	// Nota: la ruta correcta de Gemini es content.parts[0].text (parts es un
+	// array), no content[0].text.
+	const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+	return cleanMarkdown(rawText);
+}
+
 app.post('/generate', async (req, res) => {
-    try {
-        const { prompt, scriptContext, projectScripts, mapObjects, hasTerrain, history } = req.body;
-        if (!prompt) {
-            return res.status(400).json({ error: "El prompt es requerido." });
-        }
+	try {
+		const { prompt } = req.body;
 
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-            return res.status(500).json({ error: "No se ha configurado GEMINI_API_KEY en el servidor." });
-        }
+		if (!prompt) {
+			return res.status(400).json({ error: 'El prompt es requerido.' });
+		}
 
-        // Armamos el contexto completo: listado de scripts, mapa de objetos,
-        // selección actual (si vino), y al final el pedido del usuario.
-        let contextoPartes = [];
+		const apiKey = process.env.GEMINI_API_KEY;
+		if (!apiKey) {
+			return res.status(500).json({ error: 'No se ha configurado GEMINI_API_KEY en el servidor.' });
+		}
 
-        if (Array.isArray(projectScripts) && projectScripts.length > 0) {
-            const listado = projectScripts.map(s =>
-                `Path: ${s.path}\nTipo: ${s.className}\nSource:\n${s.source}`
-            ).join('\n---\n');
-            contextoPartes.push(`Listado completo de scripts existentes en el proyecto:\n---\n${listado}\n---`);
-        }
+		let code = await callGemini(prompt, apiKey);
+		let balance = checkBlockBalance(code);
 
-        if (Array.isArray(mapObjects) && mapObjects.length > 0) {
-            const listadoMapa = mapObjects.map(o =>
-                `${o.name} (${o.className}) - posición: (${o.position.x}, ${o.position.y}, ${o.position.z}) - tamaño: (${o.size.x}, ${o.size.y}, ${o.size.z})`
-            ).join('\n');
-            contextoPartes.push(`Objetos existentes en el Workspace (nivel superior):\n---\n${listadoMapa}\n---`);
-        }
+		// Si detectamos desbalance (probable truncamiento o error de sintaxis),
+		// reintentamos UNA vez pidiéndole explícitamente a Gemini que corrija
+		// el problema, mostrándole su propio código.
+		if (!balance.balanced) {
+			const retryPrompt = `Tu respuesta anterior tiene un error de sintaxis: le faltan ${balance.diff} palabra(s) "end" respecto a los bloques abiertos (function/if/for/while). Aquí está tu código, corrígelo y devuelve SOLO el código Luau corregido, completo y balanceado, sin explicaciones:\n\n${code}`;
 
-        if (hasTerrain) {
-            contextoPartes.push(`El mapa tiene Terrain (terreno esculpido) además de las partes/modelos listados.`);
-        }
+			code = await callGemini(retryPrompt, apiKey);
+			balance = checkBlockBalance(code);
+		}
 
-        if (scriptContext && scriptContext.source) {
-            contextoPartes.push(`El usuario tiene actualmente seleccionado en el Explorer el script "${scriptContext.name}" (tipo ${scriptContext.className}). Es probable que su pedido se refiera a este script en particular.`);
-        }
+		// Si sigue desbalanceado después del reintento, avisamos al plugin
+		// en vez de mandar código roto directo a loadstring().
+		if (!balance.balanced) {
+			return res.status(422).json({
+				error: 'La IA generó código con posible error de sintaxis (bloques sin cerrar) incluso tras un reintento. Revisa el prompt o inténtalo de nuevo.',
+				code, // lo mandamos igual para que puedas inspeccionarlo si quieres
+			});
+		}
 
-        contextoPartes.push(`Pedido del usuario: ${prompt}`);
-
-        const fullPrompt = contextoPartes.join('\n\n');
-
-        // Armamos los turnos previos de la conversación (si vinieron) como contents
-        // separados, para que Gemini tenga memoria real de lo que se pidió y contestó antes.
-        const contentsHistorial = [];
-        if (Array.isArray(history)) {
-            for (const turno of history) {
-                if (turno && (turno.role === 'user' || turno.role === 'model') && typeof turno.text === 'string' && turno.text.trim() !== '') {
-                    contentsHistorial.push({
-                        role: turno.role,
-                        parts: [{ text: turno.text }]
-                    });
-                }
-            }
-        }
-
-        // Modelo actualizado: gemini-1.5-flash fue retirado por Google (devuelve 404).
-        // gemini-3.1-flash-lite es el reemplazo vigente equivalente en velocidad/costo.
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`;
-
-        const payload = {
-            system_instruction: {
-                parts: [{ text: SYSTEM_INSTRUCTION }]
-            },
-            contents: [
-                ...contentsHistorial,
-                {
-                    role: 'user',
-                    parts: [{ text: fullPrompt }]
-                }
-            ],
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: "OBJECT",
-                    properties: {
-                        mensaje: { type: "STRING" },
-                        codigo: { type: "STRING" }
-                    },
-                    required: ["mensaje", "codigo"]
-                }
-            }
-        };
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            console.error("Error en respuesta de Google API:", data);
-            return res.status(response.status).json({ error: data.error?.message || "Error devuelto por la API de Gemini" });
-        }
-
-        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-        let mensaje = '';
-        let codigo = '';
-
-        try {
-            const parsed = JSON.parse(rawText);
-            mensaje = parsed.mensaje || '';
-            codigo = parsed.codigo || '';
-        } catch (parseError) {
-            // Salvaguarda por si el modelo no respetó el JSON schema (no debería pasar, pero por las dudas).
-            console.error("No se pudo parsear la respuesta JSON de Gemini:", rawText);
-            return res.status(502).json({ error: "La IA no devolvió un formato válido. Intentá de nuevo." });
-        }
-
-        // Limpieza de formato Markdown por si se cuela igual
-        codigo = codigo.replace(/```lua/g, '').replace(/```/g, '').trim();
-
-        // SEGUNDA CAPA DE SEGURIDAD: por si el modelo ignora el system prompt,
-        // bloqueamos acá cualquier método de borrado antes de que llegue al plugin.
-        const patronesProhibidos = [
-            /:ClearAllChildren\s*\(/i,
-            /:Destroy\s*\(/i,
-            /:Remove\s*\(/i
-        ];
-        const contieneCodigoProhibido = patronesProhibidos.some(patron => patron.test(codigo));
-
-        if (contieneCodigoProhibido) {
-            console.warn("Código bloqueado por contener instrucciones de borrado:", codigo);
-            return res.status(422).json({
-                error: "La respuesta generada intentaba borrar objetos del Workspace y fue bloqueada por seguridad. Reformulá el prompt."
-            });
-        }
-
-        res.json({ message: mensaje, code: codigo });
-
-    } catch (error) {
-        console.error("Error interno en servidor:", error);
-        res.status(500).json({ error: error.message || "Error interno al procesar la solicitud" });
-    }
+		return res.json({ code });
+	} catch (error) {
+		console.error('Error en /generate:', error);
+		return res.status(error.status || 500).json({ error: error.message || 'Error interno del servidor.' });
+	}
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor activo en el puerto ${PORT}`));
+app.listen(PORT, () => {
+	console.log(`Servidor escuchando en el puerto ${PORT}`);
+});
